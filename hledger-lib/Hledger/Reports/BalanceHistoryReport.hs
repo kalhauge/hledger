@@ -25,11 +25,11 @@ import Hledger.Reports.TransactionsReports
 
 -- | Get the historical running inclusive balance of a particular account,
 -- from earliest to latest posting date.
-accountBalanceHistory :: ReportOpts -> Journal -> Account -> [(Day, MixedAmount)]
+accountBalanceHistory :: ReportOpts -> Journal -> AccountName -> [(Day, MixedAmount)]
 accountBalanceHistory ropts j a = [(getdate t, bal) | (t,_,_,_,_,bal) <- items]
   where
     (_,items) = journalTransactionsReport ropts j acctquery
     inclusivebal = True
-    acctquery = Acct $ (if inclusivebal then accountNameToAccountRegex else accountNameToAccountOnlyRegex) $ aname a
+    acctquery = Acct $ (if inclusivebal then accountNameToAccountRegex else accountNameToAccountOnlyRegex) $ a
     getdate = if date2_ ropts then transactionDate2 else tdate
 

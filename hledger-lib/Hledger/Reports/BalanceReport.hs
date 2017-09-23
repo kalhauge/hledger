@@ -1,15 +1,9 @@
+{-# LANGUAGE StandaloneDeriving, GeneralizedNewtypeDeriving #-}
 {-|
 
 Balance report, used by the balance command.
 
 -}
-
-
-
-
-
-
-
 
 {-# LANGUAGE FlexibleInstances, ScopedTypeVariables, OverloadedStrings #-}
 
@@ -22,30 +16,44 @@ module Hledger.Reports.BalanceReport (
   amountValue,
   flatShowsExclusiveBalance,
 
+  -- * Balances
+  Balance (..),
+  Total,
+  Inclusive (..),
+  Exclusive (..),
+  BySpan (..),
+
   -- * Tests
   tests_Hledger_Reports_BalanceReport
 )
 where
 
-import Data.List
+import Data.List as List
+import Data.Monoid
 import Data.Ord
-import Data.Maybe
 import Data.Time.Calendar
-import Test.HUnit
+import qualified Data.Map as Map
 import qualified Data.Text as T
 
 import Hledger.Data
-import Hledger.Read (mamountp')
+import Hledger.Data.Trie as Trie
+import Hledger.Data.Span as Span
+import Hledger.Data.MonoidalMap as MM
 import Hledger.Query
-import Hledger.Utils
+import Hledger.Read (mamountp')
 import Hledger.Reports.ReportOptions
+import Hledger.Utils
 
+import Test.HUnit
 
+account'FromName = accountNameComponents
 
+class Monoid bal => Balance bal where
+  fromPosting :: Transaction -> Posting -> bal
 
-
-
-
+  journalBalance :: Query -> Journal -> bal
+  journalBalance q j =
+    foldMap (uncurry fromPosting) $ journalQueryPostings q j
 
 -- | A simple single-column balance report. It has:
 --
@@ -71,86 +79,57 @@ type BalanceReportItem = (AccountName, AccountName, Int, MixedAmount)
 -- Single/multi-col balance reports currently aren't all correct if this is false.
 flatShowsExclusiveBalance    = True
 
--- | Enabling this makes balance --flat --empty also show parent accounts without postings,
--- in addition to those with postings and a zero balance. Disabling it shows only the latter.
--- No longer supported, but leave this here for a bit.
--- flatShowsPostinglessAccounts = True
-
--- | Generate a simple balance report, containing the matched accounts and
--- their balances (change of balance) during the specified period.
--- This is like PeriodChangeReport with a single column (but more mature,
--- eg this can do hierarchical display).
 balanceReport :: ReportOpts -> Query -> Journal -> BalanceReport
-balanceReport opts q j = (items, total)
-    where
-      -- dbg1 = const id -- exclude from debug output
-      dbg1 s = let p = "balanceReport" in Hledger.Utils.dbg1 (p++" "++s)  -- add prefix in debug output
-
-      accts = ledgerRootAccount $ ledgerFromJournal q $ journalSelectingAmountFromOpts opts j
-      accts' :: [Account]
-          | queryDepth q == 0 =
-                         dbg1 "accts" $
-                         take 1 $ clipAccountsAndAggregate (queryDepth q) $ flattenAccounts accts
-          | flat_ opts = dbg1 "accts" $
-                         maybesortflat $
-                         filterzeros $
-                         filterempty $
-                         drop 1 $ clipAccountsAndAggregate (queryDepth q) $ flattenAccounts accts
-          | otherwise  = dbg1 "accts" $
-                         filter (not.aboring) $
-                         drop 1 $ flattenAccounts $
-                         markboring $
-                         prunezeros $
-                         maybesorttree $
-                         clipAccounts (queryDepth q) accts
-          where
-            balance     = if flat_ opts then aebalance else aibalance
-            filterzeros = if empty_ opts then id else filter (not . isZeroMixedAmount . balance)
-            filterempty = filter (\a -> anumpostings a > 0 || not (isZeroMixedAmount (balance a)))
-            prunezeros  = if empty_ opts then id else fromMaybe nullacct . pruneAccounts (isZeroMixedAmount . balance)
-            markboring  = if no_elide_ opts then id else markBoringParentAccounts
-            maybesortflat | sort_amount_ opts = sortBy (maybeflip $ comparing balance)
-                          | otherwise = id
-              where
-                maybeflip = if normalbalance_ opts == Just NormalNegative then id else flip
-            maybesorttree | sort_amount_ opts = sortAccountTreeByAmount (fromMaybe NormalPositive $ normalbalance_ opts)
-                          | otherwise = id
-      items = dbg1 "items" $ map (balanceReportItem opts q) accts'
-      total | not (flat_ opts) = dbg1 "total" $ sum [amt | (_,_,indent,amt) <- items, indent == 0]
-            | otherwise        = dbg1 "total" $
-                                 if flatShowsExclusiveBalance
-                                 then sum $ map fourth4 items
-                                 else sum $ map aebalance $ clipAccountsAndAggregate 1 accts'
-
--- | In an account tree with zero-balance leaves removed, mark the
--- elidable parent accounts (those with one subaccount and no balance
--- of their own).
-markBoringParentAccounts :: Account -> Account
-markBoringParentAccounts = tieAccountParents . mapAccounts mark
+balanceReport opts q j
+  | flat_ opts = flatReport
+  | otherwise = treeReport
   where
-    mark a | length (asubs a) == 1 && isZeroMixedAmount (aebalance a) = a{aboring=True}
-           | otherwise = a
+    flatReport = (items, total)
+      where
+        Exclusive balance = journalBalance q j :: Exclusive Total
+        total = getSum . Map.foldMapWithKey (\_ s -> s) . unMonoidalMap $ balance
+        items =
+          map (\(name, total) -> (aname' name, aname' name, 0, getSum total))
+          . Map.toAscList
+          . unMonoidalMap
+          $ balance
 
-balanceReportItem :: ReportOpts -> Query -> Account -> BalanceReportItem
-balanceReportItem opts q a
-  | flat_ opts = (name, name,       0,      (if flatShowsExclusiveBalance then aebalance else aibalance) a)
-  | otherwise  = (name, elidedname, indent, aibalance a)
-  where
-    name | queryDepth q > 0 = aname a
-         | otherwise        = "..."
-    elidedname = accountNameFromComponents (adjacentboringparentnames ++ [accountLeafName name])
-    adjacentboringparentnames = reverse $ map (accountLeafName.aname) $ takeWhile aboring parents
-    indent = length $ filter (not.aboring) parents
-    -- parents exclude the tree's root node
-    parents = case parentAccounts a of [] -> []
-                                       as -> init as
+    treeReport =  {-# SCC "treeReport" #-} snd $ Trie.reduce reductor balance
+      where
+        Inclusive balance =
+          journalBalance q j :: Inclusive Total
 
--- -- the above using the newer multi balance report code:
--- balanceReport' opts q j = (items, total)
---   where
---     MultiBalanceReport (_,mbrrows,mbrtotals) = PeriodChangeReport opts q j
---     items = [(a,a',n, headDef 0 bs) | ((a,a',n), bs) <- mbrrows]
---     total = headDef 0 mbrtotals
+        reductor
+          :: Sum MixedAmount
+          -> [(T.Text, (Account', BalanceReport))]
+          -> (Account', BalanceReport)
+        reductor (Sum total) subs =
+          case subs of
+            -- An item is boring if it only has one sub,
+            -- if that is the case promote that sub to be the active node.
+            [(name, (an, (items', total')))]
+              | total' == total ->
+              (name:an, (map (addName name) items', total))
+            _ ->
+              -- If more or zero subs combine them, an choose the empty
+              -- name space
+              ([], (concatMap (uncurry combine) subs, total))
+
+        combine name (an, (items', total'))
+          | isZeroMixedAmount total' && null items' && not (empty_ opts) = []
+          | otherwise =
+              (aname' (name:an), aname' (name:an), 0, total')
+              : map (addName name) items'
+
+        addName name (an, elied, i, ma) =
+          (aname' [name, an], elied, i + 1, ma)
+
+    aname' = accountNameFromComponents
+
+-- -- | Enabling this makes balance --flat --empty also show parent accounts without postings,
+-- -- in addition to those with postings and a zero balance. Disabling it shows only the latter.
+-- -- No longer supported, but leave this here for a bit.
+--   -- flatShowsPostinglessAccounts = True
 
 -- | Convert all the amounts in a single-column balance report to
 -- their value on the given date in their default valuation
@@ -198,18 +177,49 @@ commodityValue j valuationdate c
       , mpdate p <= valuationdate
       ]
 
+-- | Total is a Sum of 'MixedAmount'
+type Total = Sum MixedAmount
 
+instance Balance Total where
+  fromPosting _ = Sum . pamount
 
+-- | Inclusive is a grouping of balances over Accounts
+newtype Inclusive bal =
+  Inclusive (Trie AccountName bal)
+  deriving (Show, Eq, Monoid)
 
+instance Balance bal => Balance (Inclusive bal) where
+  fromPosting t p = Inclusive $ Trie.singleton name $ fromPosting t p
+    where name = account'FromName $ paccount p
 
+-- | Exclusive is a grouping of balances over 'Account', totals of
+-- super accounts are exclusive of .
+newtype Exclusive bal =
+  Exclusive (MonoidalMap Account' bal)
+  deriving (Show, Eq, Monoid)
 
+instance Balance bal => Balance (Exclusive bal) where
+  fromPosting t p = Exclusive $ MM.singleton name $ fromPosting t p
+    where name = account'FromName $ paccount p
+
+-- | Group a balance over spans
+newtype BySpan bl =
+  BySpan (MonoidalMap (Span Day) bl)
+  deriving (Show, Eq, Monoid)
+
+instance Balance bl => Balance (BucketTree Day -> BySpan bl) where
+  fromPosting t p bd =
+    BySpan $ MM.singleton (Span.lookup date bd) $ fromPosting t p
+    where date = maybe (tdate t) id $ pdate p
 
 tests_balanceReport =
   let
     (opts,journal) `gives` r = do
       let (eitems, etotal) = r
           (aitems, atotal) = balanceReport opts (queryFromOpts nulldate opts) journal
-          showw (acct,acct',indent,amt) = (acct, acct', indent, showMixedAmountDebug amt)
+          showw (acct,acct',indent,amt) =
+            -- (acct, acct', indent)
+            (acct, acct', indent, showMixedAmountDebug amt)
       assertEqual "items" (map showw eitems) (map showw aitems)
       assertEqual "total" (showMixedAmountDebug etotal) (showMixedAmountDebug atotal)
     usd0 = usd 0

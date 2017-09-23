@@ -8,6 +8,6 @@ extra-deps:
 packages:
 - hledger-lib
 - hledger
-- hledger-ui
-- hledger-web
-- hledger-api
+  # - hledger-ui
+  # - hledger-web
+  # - hledger-api

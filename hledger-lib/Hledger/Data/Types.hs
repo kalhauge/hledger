@@ -101,6 +101,8 @@ instance NFData Interval
 
 type AccountName = Text
 
+type Account' = [Text]
+
 data AccountAlias = BasicAlias AccountName AccountName
                   | RegexAlias Regexp Replacement
   deriving (Eq, Read, Show, Ord, Data, Generic, Typeable)
@@ -345,19 +347,6 @@ data Reader = Reader {
 
 instance Show Reader where show r = rFormat r ++ " reader"
 
--- | An account, with name, balances and links to parent/subaccounts
--- which let you walk up or down the account tree.
-data Account = Account {
-  aname                     :: AccountName,   -- ^ this account's full name
-  aebalance                 :: MixedAmount,   -- ^ this account's balance, excluding subaccounts
-  asubs                     :: [Account],     -- ^ sub-accounts
-  anumpostings              :: Int,           -- ^ number of postings to this account
-  -- derived from the above :
-  aibalance                 :: MixedAmount,   -- ^ this account's balance, including subaccounts
-  aparent                   :: Maybe Account, -- ^ parent account
-  aboring                   :: Bool           -- ^ used in the accounts report to label elidable parents
-  } deriving (Typeable, Data, Generic)
-
 -- | Whether an account's balance is normally a positive number (in accounting terms,
 -- normally a debit balance), as for asset and expense accounts, or a negative number
 -- (in accounting terms, normally a credit balance), as for liability, equity and 
@@ -366,13 +355,3 @@ data NormalBalance =
     NormalPositive -- ^ normally debit - assets, expenses...
   | NormalNegative -- ^ normally credit - liabilities, equity, income...
   deriving (Show, Data, Eq) 
-
--- | A Ledger has the journal it derives from, and the accounts
--- derived from that. Accounts are accessible both list-wise and
--- tree-wise, since each one knows its parent and subs; the first
--- account is the root of the tree and always exists.
-data Ledger = Ledger {
-  ljournal  :: Journal,
-  laccounts :: [Account]
-}
-

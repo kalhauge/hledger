@@ -215,11 +215,8 @@ summarisePostingsInDateSpan (DateSpan b e) wd depth showempty ps
       summarypes = map (, Just e') $ (if showempty then id else filter (not . isZeroMixedAmount . pamount)) summaryps
       anames = sort $ nub $ map paccount ps
       -- aggregate balances by account, like ledgerFromJournal, then do depth-clipping
-      accts = accountsFromPostings ps
-      balance a = maybe nullmixedamt bal $ lookupAccount a accts
-        where
-          bal = if isclipped a then aibalance else aebalance
-          isclipped a = accountNameLevel a >= depth
+      -- TODO: Fix this
+      balance a = nullmixedamt
 
 -- tests_summarisePostingsInDateSpan = [
   --  "summarisePostingsInDateSpan" ~: do

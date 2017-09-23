@@ -91,13 +91,13 @@ library:
   exposed-modules:
   - Hledger
   - Hledger.Data
-  - Hledger.Data.Account
+# - Hledger.Data.Account
   - Hledger.Data.AccountName
   - Hledger.Data.Amount
   - Hledger.Data.Commodity
   - Hledger.Data.Dates
   - Hledger.Data.Journal
-  - Hledger.Data.Ledger
+# - Hledger.Data.Ledger
   - Hledger.Data.MarketPrice
   - Hledger.Data.Period
   - Hledger.Data.StringFormat
@@ -120,7 +120,7 @@ library:
   - Hledger.Reports.BalanceHistoryReport
   - Hledger.Reports.BalanceReport
   - Hledger.Reports.EntriesReport
-  - Hledger.Reports.MultiBalanceReports
+# - Hledger.Reports.MultiBalanceReports
   - Hledger.Reports.PostingsReport
   - Hledger.Reports.TransactionsReports
   - Hledger.Utils

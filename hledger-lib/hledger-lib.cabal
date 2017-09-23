@@ -86,13 +86,11 @@ library
   exposed-modules:
       Hledger
       Hledger.Data
-      Hledger.Data.Account
       Hledger.Data.AccountName
       Hledger.Data.Amount
       Hledger.Data.Commodity
       Hledger.Data.Dates
       Hledger.Data.Journal
-      Hledger.Data.Ledger
       Hledger.Data.MarketPrice
       Hledger.Data.Period
       Hledger.Data.StringFormat
@@ -114,7 +112,6 @@ library
       Hledger.Reports.BalanceHistoryReport
       Hledger.Reports.BalanceReport
       Hledger.Reports.EntriesReport
-      Hledger.Reports.MultiBalanceReports
       Hledger.Reports.PostingsReport
       Hledger.Reports.TransactionsReports
       Hledger.Utils
@@ -129,6 +126,10 @@ library
       Hledger.Utils.UTF8IOCompat
       Text.Megaparsec.Compat
   other-modules:
+      Hledger.Data.MonoidalMap
+      Hledger.Data.Span
+      Hledger.Data.Trie
+      Hledger.Reports.MultiBalanceReports
       Paths_hledger_lib
   default-language: Haskell2010
 
@@ -176,21 +177,22 @@ test-suite doctests
   other-modules:
       Hledger
       Hledger.Data
-      Hledger.Data.Account
       Hledger.Data.AccountName
       Hledger.Data.Amount
       Hledger.Data.AutoTransaction
       Hledger.Data.Commodity
       Hledger.Data.Dates
       Hledger.Data.Journal
-      Hledger.Data.Ledger
       Hledger.Data.MarketPrice
+      Hledger.Data.MonoidalMap
       Hledger.Data.Period
       Hledger.Data.Posting
       Hledger.Data.RawOptions
+      Hledger.Data.Span
       Hledger.Data.StringFormat
       Hledger.Data.Timeclock
       Hledger.Data.Transaction
+      Hledger.Data.Trie
       Hledger.Data.Types
       Hledger.Query
       Hledger.Read
@@ -265,21 +267,22 @@ test-suite hunittests
   other-modules:
       Hledger
       Hledger.Data
-      Hledger.Data.Account
       Hledger.Data.AccountName
       Hledger.Data.Amount
       Hledger.Data.AutoTransaction
       Hledger.Data.Commodity
       Hledger.Data.Dates
       Hledger.Data.Journal
-      Hledger.Data.Ledger
       Hledger.Data.MarketPrice
+      Hledger.Data.MonoidalMap
       Hledger.Data.Period
       Hledger.Data.Posting
       Hledger.Data.RawOptions
+      Hledger.Data.Span
       Hledger.Data.StringFormat
       Hledger.Data.Timeclock
       Hledger.Data.Transaction
+      Hledger.Data.Trie
       Hledger.Data.Types
       Hledger.Query
       Hledger.Read

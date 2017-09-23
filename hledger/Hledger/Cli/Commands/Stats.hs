@@ -47,15 +47,19 @@ stats :: CliOpts -> Journal -> IO ()
 stats opts@CliOpts{reportopts_=reportopts_} j = do
   d <- getCurrentDay
   let q = queryFromOpts d reportopts_
-      l = ledgerFromJournal q j
-      reportspan = (ledgerDateSpan l) `spanDefaultsFrom` (queryDateSpan False q)
+      -- inlining ledgerFromJournal
+      (q',depthq)  = (filterQuery (not . queryIsDepth) q, filterQuery queryIsDepth q)
+      j' = filterJournalAmounts (filterQuery queryIsSym q) (filterJournalPostings q' j)
+      j2 = filterJournalPostings depthq j'
+      reportspan = (postingsDateSpan $journalPostings j2)
+          `spanDefaultsFrom` (queryDateSpan False q)
       intervalspans = splitSpan (interval_ reportopts_) reportspan
-      showstats = showLedgerStats l d
+      showstats = showLedgerStats j2 d
       s = intercalate "\n" $ map showstats intervalspans
   writeOutput opts s
 
-showLedgerStats :: Ledger -> Day -> DateSpan -> String
-showLedgerStats l today span =
+showLedgerStats :: Journal -> Day -> DateSpan -> String
+showLedgerStats j today span =
     unlines $ map (\(label,value) -> concatBottomPadded [printf fmt1 label, value]) stats
     where
       fmt1 = "%-" ++ show w1 ++ "s: "
@@ -79,7 +83,6 @@ showLedgerStats l today span =
       -- Days since last transaction : %(recentelapsed)s
        ]
            where
-             j = ljournal l
              path = journalFilePath j
              ts = sortBy (comparing tdate) $ filter (spanContainsDate span . tdate) $ jtxns j
              as = nub $ map paccount $ concatMap tpostings ts

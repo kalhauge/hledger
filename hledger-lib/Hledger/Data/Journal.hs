@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE StandaloneDeriving, OverloadedStrings #-}
 {-|
@@ -44,6 +45,7 @@ module Hledger.Data.Journal (
   journalNextTransaction,
   journalPrevTransaction,
   journalPostings,
+  journalQueryPostings,
   -- * Standard account types
   journalBalanceSheetAccountQuery,
   journalProfitAndLossAccountQuery,
@@ -248,6 +250,22 @@ journalAccountNames = sort . expandAccountNames . journalAccountNamesUsed
 
 journalAccountNameTree :: Journal -> Tree AccountName
 journalAccountNameTree = accountNameTreeFrom . journalAccountNames
+
+
+-- | Query the journal, only extracting the postings where the
+-- query matches the transaction, the posting, and the account of
+-- the posting.
+journalQueryPostings :: Query -> Journal -> [(Transaction, Posting)]
+journalQueryPostings q =
+  Data.List.filter (matchesPosting' q . snd)
+  . concatMap (\t -> map (t,) $ tpostings t)
+  . Data.List.filter (matchesTransaction q)
+  . jtxns
+  where
+    matchesPosting' q p =
+      matchesPosting q p
+      && matchesAccount q (paccount p)
+
 
 -- standard account types
 
@@ -871,6 +889,13 @@ journalDateSpan secondary j
       tdates   = map (if secondary then transactionDate2 else tdate) ts
       pdates   = concatMap (catMaybes . map (if secondary then (Just . postingDate2) else pdate) . tpostings) ts
       ts       = jtxns j
+
+
+-- | Using a query extract all transactions that matches that query from
+-- the journal.
+journalQueryTransactions :: Journal -> Query -> [ Transaction ]
+journalQueryTransactions j q =
+  filter (matchesTransaction q) $ jtxns j
 
 -- #ifdef TESTS
 test_journalDateSpan = do

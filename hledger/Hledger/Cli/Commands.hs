@@ -294,12 +294,6 @@ tests_Hledger_Cli_Commands = TestList [
     let p = head $ tpostings $ head $ jtxns j
     assertBool "" $ paccount p == "equity:draw:personal:food"
 
-  ,"ledgerAccountNames" ~:
-    ledgerAccountNames ledger7 `is`
-     ["assets","assets:cash","assets:checking","assets:saving","equity","equity:opening balances",
-      "expenses","expenses:food","expenses:food:dining","expenses:phone","expenses:vacation",
-      "liabilities","liabilities:credit cards","liabilities:credit cards:discover"]
-
   -- ,"journalCanonicaliseAmounts" ~:
   --  "use the greatest precision" ~:
   --   (map asprecision $ journalAmountAndPriceCommodities $ journalCanonicaliseAmounts $ journalWithAmounts ["1","2.00"]) `is` [2,2]
@@ -631,6 +625,3 @@ journal7 = nulljournal {jtxns =
            }
           ]
          }
-
-ledger7 :: Ledger
-ledger7 = ledgerFromJournal Any journal7
